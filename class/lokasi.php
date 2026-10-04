@@ -98,7 +98,7 @@ class Lokasi
     public function isUsed(string $id): int
     {
         $row = $this->db->fetchOne(
-            'SELECT COUNT(*) AS n FROM laporan WHERE lokasi_id = ?',
+            'SELECT COUNT(*) AS n FROM laporan WHERE id_lokasi = ?',
             [trim($id)]
         );
         return (int) $row['n'];

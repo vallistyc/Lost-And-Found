@@ -1,19 +1,15 @@
 <?php
-require_once __DIR__ . '/../class/dbconnection.php';
-require_once __DIR__ . '/../class/user.php';
+require_once __DIR__ . '/partials/guard.php';
+wajibTamu();
 
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
-session_start();
-
-if (isset($_SESSION['user'])) { header('Location: index.php'); exit; }
-
-$e = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
-$flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
-
-$error = '';
+$csrf = csrfToken();
+$flash = Helper::pullFlash();
 $identitas = '';
 
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    wajibCsrf();
     $identitas = is_string($_POST['identitas'] ?? null) ? trim($_POST['identitas']) : '';
     $password  = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
 
@@ -22,16 +18,20 @@ $identitas = '';
     } else {
         try {
             $user = (new User(new DBconnection()))->login($identitas, $password);
-            session_regenerate_id(true);  
-            $_SESSION['user'] = $user;
-            header('Location: index.php');
-            exit;
+            session_regenerate_id(true);
+            $_SESSION['nim'] = $user['nim'];
+            $_SESSION['role'] = $user['role'];
+            $_SESSION['nama'] = $user['nama_user'];
+            Helper::redirect(BASE_URL . ($user['role'] === User::ROLE_ADMIN ? '/admin/index.php' : '/index.php'));
         } catch (PDOException $ex) {
             $error = 'Terjadi gangguan pada server. Coba lagi nanti.';
         } catch (Exception $ex) {
             $error = $ex->getMessage();
         }
     }
+}
+
+$e = [Helper::class, 'e'];
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -73,10 +73,10 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 <body class="authbg">
 <main class="authcard">
   <div class="authhead"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><h1>LostAndFound Kampus</h1><p>Sistem Pelaporan Barang Hilang &amp; Temuan Mahasiswa</p></div>
-  <?php if ($flash): ?><div class="alert <?= $e($flash['type']) ?>"><?= $e($flash['msg']) ?></div><?php endif; ?>
+  <?php if ($flash): ?><div class="alert <?= $flash['tipe'] === 'success' ? 'ok' : ($flash['tipe'] === 'danger' ? 'err' : 'info') ?>"><?= $e($flash['pesan']) ?></div><?php endif; ?>
   <?php if ($error): ?><div class="alert err"><?= $e($error) ?></div><?php endif; ?>
   <form method="post">
-    <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
+    <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
     <label for="identitas">NIM</label>
    <input class="in" id="identitas" name="identitas" value="<?= $e($identitas) ?>" required autofocus>
     <label for="password">Password</label>

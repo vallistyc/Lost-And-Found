@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../../bootstrap.php';
 
 function wajibTamu(): void {
     if (!isset($_SESSION['nim'])) {
@@ -14,25 +14,25 @@ function wajibTamu(): void {
 }
 
 function wajibLogin(User $user): array {
-    // Cek apakah User sudah log in dg melihat data session
     if (!isset($_SESSION['nim'])) {
-        Helper::setFlash('warning', 'Silahkan log in dulu');
+        Helper::setFlash('warning', 'Silakan masuk terlebih dahulu.');
         Helper::redirect(BASE_URL . '/login.php');
     }
 
-    $u = $user->findbyId($_SESSION['nim']);
+    $u = $user->findById((string) $_SESSION['nim']);
 
     if (!$u || (int) $u['is_active'] === 0) {
         unset($_SESSION['nim'], $_SESSION['role'], $_SESSION['nama']);
-        Helper::setFlash('danger', 'Akun anda tidak aktif');
+        Helper::setFlash('danger', 'Akun tidak ditemukan atau tidak aktif.');
         Helper::redirect(BASE_URL . '/login.php');
     }
 
+    $_SESSION['role'] = $u['role'];
+    $_SESSION['nama'] = $u['nama_user'];
     return $u;
 }
 
 function wajibRole(string $role, User $user): array {
-    // Cek apakah user sudah log in
     $u = wajibLogin($user);
 
     if ($u['role'] !== $role) {
@@ -40,5 +40,20 @@ function wajibRole(string $role, User $user): array {
     }
 
     return $u;
+}
+
+function csrfToken(): string {
+    if (empty($_SESSION['csrf'])) {
+        $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf'];
+}
+
+function wajibCsrf(): void {
+    $token = $_POST['csrf'] ?? '';
+    if (!is_string($token) || !hash_equals(csrfToken(), $token)) {
+        http_response_code(419);
+        exit('Sesi tidak valid. Muat ulang halaman lalu coba lagi.');
+    }
 }
 ?>

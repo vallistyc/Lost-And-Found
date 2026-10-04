@@ -49,14 +49,9 @@ class DBconnection {
         }
     }
 
-    // Perintah untuk mengambil semua baris/record
+    // Perintah untuk mengambil semua baris/record (hasil kosong dikembalikan sebagai array kosong)
     public function fetchAll(string $sql, array $params = []): array {
-        $data = $this->query($sql, $params)->fetchAll();
-        if (!empty($data)) {
-            return $data;
-        } else {
-            throw new Exception("Data tidak ditemukan");
-        }
+        return $this->query($sql, $params)->fetchAll();
     }
 
     // Perintah untuk mengambil satu baris/record
@@ -65,14 +60,9 @@ class DBconnection {
         return $row === false ? null : $row;
     }
     
-    // INSERT, UPDATE, DELETE. Lalu mengembalikan jumlah baris yang terdampak
+    // INSERT, UPDATE, DELETE. Mengembalikan jumlah baris yang terdampak, termasuk nol.
     public function execute(string $sql, array $params): int {
-        $exec = $this->query($sql, $params)->rowCount();
-        if (!empty($exec)) {
-            return $exec;
-        } else {
-            throw new Exception("Gagal memengaruhi data");
-        };
+        return $this->query($sql, $params)->rowCount();
     }
 
     // Mendapatkan ID dari baris yang baru saja diinsert

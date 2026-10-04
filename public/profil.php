@@ -1,90 +1,64 @@
 <?php
-require_once __DIR__ . '/../class/dbconnection.php';
-require_once __DIR__ . '/../class/user.php';
-
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
-session_start();
-
-if (!isset($_SESSION['user'])) { header('Location: login.php'); exit; }
-if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
+require_once __DIR__ . '/partials/guard.php';
+$db = new DBconnection();
+$userObj = new User($db);
+$sess = wajibLogin($userObj);
+$csrf = csrfToken();
 
 $active = 'profil';
-$sess = $_SESSION['user'];
-$e = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+$e = [Helper::class, 'e'];
 $str = fn($k) => is_string($_POST[$k] ?? null) ? $_POST[$k] : '';
-$flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
-
-try {
-    $db = new DBconnection();
-} catch (PDOException $ex) {
-    exit('Gagal terhubung ke database.');
-}
-$userObj = new User($db);
+$flash = Helper::pullFlash();
 
 $errProfil = '';
 $errPass = '';
 $aksi = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $token = $_POST['csrf'] ?? '';
-    if (!is_string($token) || !hash_equals($_SESSION['csrf'], $token)) {
-        http_response_code(419);
-        exit('Sesi tidak valid. Muat ulang halaman lalu coba lagi.');
-    }
+    wajibCsrf();
     $aksi = $str('aksi');
 
     if ($aksi === 'profil') {
         try {
-           
             $userObj->profileUpdate($sess['nim'], $str('nama'), $str('no_hp'));
-            $_SESSION['user']['nama']  = trim($str('nama'));
-            $_SESSION['user']['no_hp'] = trim($str('no_hp'));
-            $_SESSION['flash'] = ['type' => 'ok', 'msg' => 'Profil berhasil diperbarui.'];
-            header('Location: profil.php');
-            exit;
+            $_SESSION['nama'] = trim($str('nama'));
+            Helper::setFlash('success', 'Profil berhasil diperbarui.');
+            Helper::redirect(BASE_URL . '/profil.php');
         } catch (PDOException $ex) {
             $errProfil = 'Terjadi gangguan pada server. Coba lagi nanti.';
         } catch (Exception $ex) {
-           
-            $errProfil = ($ex->getMessage() === 'Gagal memengaruhi data') ? 'Tidak ada perubahan data.' : $ex->getMessage();
+            $errProfil = $ex->getMessage();
         }
     } elseif ($aksi === 'password') {
-      
         $lama = $str('password_lama');
         $baru = $str('password_baru');
         $konf = $str('password_konfirmasi');
         try {
-            $row = $db->fetchOne('SELECT password FROM users WHERE nim = ? LIMIT 1', [$sess['nim']]);
             if ($lama === '' || $baru === '' || $konf === '') {
                 $errPass = 'Semua kolom password wajib diisi.';
-            } elseif ($row === null || !password_verify($lama, $row['password'])) {
-                $errPass = 'Password lama salah.';
-            } elseif (strlen($baru) < 8) {
-                $errPass = 'Password baru minimal 8 karakter.';
             } elseif ($baru !== $konf) {
                 $errPass = 'Konfirmasi password tidak cocok.';
             } else {
-                $db->execute('UPDATE users SET password = ? WHERE nim = ?', [password_hash($baru, PASSWORD_DEFAULT), $sess['nim']]);
+                $userObj->changePassword($sess['nim'], $lama, $baru);
                 session_regenerate_id(true);
-                $_SESSION['flash'] = ['type' => 'ok', 'msg' => 'Password berhasil diganti.'];
-                header('Location: profil.php');
-                exit;
+                Helper::setFlash('success', 'Password berhasil diganti.');
+                Helper::redirect(BASE_URL . '/profil.php');
             }
         } catch (Exception $ex) {
-            $errPass = 'Gagal mengganti password. Coba lagi nanti.';
+            $errPass = $ex instanceof PDOException
+                ? 'Gagal mengganti password. Coba lagi nanti.'
+                : $ex->getMessage();
         }
     }
 }
 
-try {
-    $data = $userObj->findById($sess['nim']);
-} catch (Exception $ex) {
-    $_SESSION['flash'] = ['type' => 'err', 'msg' => 'Data akun tidak ditemukan. Silakan masuk kembali.'];
-    header('Location: login.php');
-    exit;
+$data = $userObj->findById($sess['nim']);
+if ($data === null) {
+    unset($_SESSION['nim'], $_SESSION['role'], $_SESSION['nama']);
+    Helper::setFlash('danger', 'Data akun tidak ditemukan. Silakan masuk kembali.');
+    Helper::redirect(BASE_URL . '/login.php');
 }
-$valNama = $aksi === 'profil' ? $str('nama') : $data['nama'];
+$valNama = $aksi === 'profil' ? $str('nama') : $data['nama_user'];
 $valHp   = $aksi === 'profil' ? $str('no_hp') : $data['no_hp'];
 ?>
 <!DOCTYPE html>
@@ -136,13 +110,13 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 <body>
 <header class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="index.php"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span> LostFound KAMPUS</a>
+    <a class="brand" href="<?= $e(BASE_URL) ?>/index.php"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span> LostFound KAMPUS</a>
     <nav class="links">
-      <a href="index.php" class="<?= $active === 'index' ? 'on' : '' ?>">Beranda</a>
-      <a href="histori.php" class="<?= $active === 'histori' ? 'on' : '' ?>">Histori Laporan</a>
-      <a href="profil.php" class="<?= $active === 'profil' ? 'on' : '' ?>">Profil</a>
-      <form method="post" action="logout.php">
-        <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
+      <a href="<?= $e(BASE_URL) ?>/index.php" class="<?= $active === 'index' ? 'on' : '' ?>">Beranda</a>
+      <a href="<?= $e(BASE_URL) ?>/histori.php" class="<?= $active === 'histori' ? 'on' : '' ?>">Histori Laporan</a>
+      <a href="<?= $e(BASE_URL) ?>/profil.php" class="<?= $active === 'profil' ? 'on' : '' ?>">Profil</a>
+      <form method="post" action="<?= $e(BASE_URL) ?>/logout.php">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
         <button type="submit" class="btn-logout">Logout</button>
       </form>
     </nav>
@@ -150,14 +124,14 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 </header>
 <div class="wrap">
   <div class="head"><h1>Profil Saya</h1><p class="muted">Kelola informasi akun dan keamanan Anda.</p></div>
-  <?php if ($flash): ?><div class="alert <?= $e($flash['type']) ?>"><?= $e($flash['msg']) ?></div><?php endif; ?>
+  <?php if ($flash): ?><div class="alert <?= $flash['tipe'] === 'success' ? 'ok' : ($flash['tipe'] === 'danger' ? 'err' : 'info') ?>"><?= $e($flash['pesan']) ?></div><?php endif; ?>
 
   <div class="cols">
     <section class="card">
       <h2>Informasi Profil</h2>
       <?php if ($errProfil): ?><div class="alert err"><?= $e($errProfil) ?></div><?php endif; ?>
       <form method="post">
-        <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
         <input type="hidden" name="aksi" value="profil">
         <label for="nama">Nama Lengkap</label>
         <input class="in" id="nama" name="nama" value="<?= $e($valNama) ?>" required>
@@ -173,7 +147,7 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
       <h2>Ganti Password</h2>
       <?php if ($errPass): ?><div class="alert err"><?= $e($errPass) ?></div><?php endif; ?>
       <form method="post" autocomplete="off">
-        <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
         <input type="hidden" name="aksi" value="password">
         <label for="password_lama">Password Lama</label>
         <input class="in" id="password_lama" type="password" name="password_lama" required>

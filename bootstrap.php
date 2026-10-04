@@ -45,9 +45,8 @@ set_exception_handler(function (Throwable $e): void {
     ));
 
     if (!headers_sent()) {
-        header('Location: ' . BASE_URL . '/error/500.php');
-    } else {
-        echo 'Terjadi kesalahan. Silakan coba lagi nanti.';
+        http_response_code(500);
     }
+    echo 'Terjadi kesalahan. Silakan coba lagi nanti.';
     exit;
 });

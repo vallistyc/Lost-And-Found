@@ -1,29 +1,20 @@
 <?php
-require_once __DIR__ . '/../class/dbconnection.php';
-require_once __DIR__ . '/../class/user.php';
+require_once __DIR__ . '/partials/guard.php';
+wajibTamu();
 
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
-session_start();
-
-if (isset($_SESSION['user'])) { header('Location: index.php'); exit; }
-if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
-
-$e = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+$csrf = csrfToken();
+$e = [Helper::class, 'e'];
 $str = fn($k) => is_string($_POST[$k] ?? null) ? $_POST[$k] : '';
 
 $error = '';
-$old = ['nama' => '', 'nim' => '', 'no_hp' => ''];
+$old = ['nama_user' => '', 'nim' => '', 'no_hp' => ''];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $token = $_POST['csrf'] ?? '';
-    if (!is_string($token) || !hash_equals($_SESSION['csrf'], $token)) {
-        http_response_code(419);
-        exit('Sesi tidak valid. Muat ulang halaman lalu coba lagi.');
-    }
+    wajibCsrf();
 
     $input = [
         'nim'                 => $str('nim'),
-        'nama'                => $str('nama'),
+        'nama_user'           => $str('nama_user'),
         'no_hp'               => $str('no_hp'),
         'password'            => $str('password'),
         'password_konfirmasi' => $str('password_konfirmasi'),
@@ -31,10 +22,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($old as $k => $_) { $old[$k] = $input[$k]; }
 
     try {
-        (new User(new DBconnection()))->register($input); 
-        $_SESSION['flash'] = ['type' => 'ok', 'msg' => 'Pendaftaran berhasil. Silakan masuk.'];
-        header('Location: login.php');
-        exit;
+        (new User(new DBconnection()))->register($input);
+        Helper::setFlash('success', 'Pendaftaran berhasil. Silakan masuk.');
+        Helper::redirect(BASE_URL . '/login.php');
+    } catch (PDOException $ex) {
+        $error = 'Terjadi gangguan pada server. Coba lagi nanti.';
     } catch (Exception $ex) {
         $error = $ex->getMessage();
     }
@@ -87,9 +79,9 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
   <div class="authhead"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><h1>LostFound KAMPUS</h1><p>Daftar akun baru LostAndFound Kampus</p></div>
   <?php if ($error): ?><div class="alert err"><?= $e($error) ?></div><?php endif; ?>
   <form method="post">
-    <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
+    <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
     <label for="nama">Nama Lengkap</label>
-    <input class="in" id="nama" name="nama" value="<?= $e($old['nama']) ?>" required>
+    <input class="in" id="nama" name="nama_user" value="<?= $e($old['nama_user']) ?>" required>
     <label for="nim">NIM</label>
     <input class="in" id="nim" name="nim" value="<?= $e($old['nim']) ?>" required>
     <label for="no_hp">No HP / WA</label>

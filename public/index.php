@@ -1,36 +1,25 @@
 <?php
-require_once __DIR__ . '/../class/dbconnection.php';
-require_once __DIR__ . '/../class/user.php';
-
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
-session_start();
-
-if (!isset($_SESSION['user'])) { header('Location: login.php'); exit; }
-if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
+require_once __DIR__ . '/partials/guard.php';
+$db = new DBconnection();
+$user = new User($db);
+$currentUser = wajibLogin($user);
+if ($currentUser['role'] === User::ROLE_ADMIN) {
+    Helper::redirect(BASE_URL . '/admin/index.php');
+}
+$csrf = csrfToken();
 
 $active = 'index';
-$e = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
-$flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
+$e = [Helper::class, 'e'];
+$flash = Helper::pullFlash();
 
 $q = (isset($_GET['q']) && is_string($_GET['q'])) ? trim($_GET['q']) : '';
-
-$sql = 'SELECT nama_barang, deskripsi, tanggal_hilang, foto FROM laporan WHERE status = ?';
-$params = ['dipublikasi'];
-if ($q !== '') {
-    $sql .= ' AND nama_barang LIKE ?';
-    $params[] = '%' . $q . '%';
-}
-$sql .= ' ORDER BY tanggal_hilang DESC LIMIT 12';
 
 $items = [];
 $error = '';
 try {
-    $items = (new DBconnection())->fetchAll($sql, $params);
+    $items = (new Laporan($db))->feed((string) $currentUser['nim'], ['q' => $q])['data'];
 } catch (PDOException $ex) {
     $error = 'Gagal memuat data. Coba lagi nanti.';
-} catch (Exception $ex) {
-    $items = [];
 }
 ?>
 <!DOCTYPE html>
@@ -76,7 +65,7 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 .banner{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border-radius:14px;padding:28px}
 .banner h1{margin:0 0 4px;font-size:22px}.banner p{margin:0 0 16px;font-size:14px;opacity:.9}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-top:20px}
-.item{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.item{display:block;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;color:inherit}
 .item .ph{height:160px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px}
 .item img{width:100%;height:160px;object-fit:cover;display:block}
 .item .bd{padding:14px}.item h3{margin:6px 0 4px;font-size:15px}
@@ -86,26 +75,27 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 <body>
 <header class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="index.php"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span> LostFound KAMPUS</a>
+    <a class="brand" href="<?= $e(BASE_URL) ?>/index.php"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span> LostFound KAMPUS</a>
     <nav class="links">
-      <a href="index.php" class="<?= $active === 'index' ? 'on' : '' ?>">Beranda</a>
-      <a href="histori.php" class="<?= $active === 'histori' ? 'on' : '' ?>">Histori Laporan</a>
-      <a href="profil.php" class="<?= $active === 'profil' ? 'on' : '' ?>">Profil</a>
-      <form method="post" action="logout.php">
-        <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
+      <a href="<?= $e(BASE_URL) ?>/index.php" class="<?= $active === 'index' ? 'on' : '' ?>">Beranda</a>
+      <a href="<?= $e(BASE_URL) ?>/histori.php" class="<?= $active === 'histori' ? 'on' : '' ?>">Histori Laporan</a>
+      <a href="<?= $e(BASE_URL) ?>/profil.php" class="<?= $active === 'profil' ? 'on' : '' ?>">Profil</a>
+      <form method="post" action="<?= $e(BASE_URL) ?>/logout.php">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
         <button type="submit" class="btn-logout">Logout</button>
       </form>
     </nav>
   </div>
 </header>
 <div class="wrap">
-  <?php if ($flash): ?><div class="alert <?= $e($flash['type']) ?>"><?= $e($flash['msg']) ?></div><?php endif; ?>
+  <?php if ($flash): ?><div class="alert <?= $flash['tipe'] === 'success' ? 'ok' : ($flash['tipe'] === 'danger' ? 'err' : 'info') ?>"><?= $e($flash['pesan']) ?></div><?php endif; ?>
 
   <section class="banner">
     <h1>Kehilangan Barang di Kampus?</h1>
     <p>Cari barang kamu atau bantu kembalikan ke pemiliknya.</p>
+    <a class="btn" href="<?= $e(BASE_URL) ?>/laporan/buat.php">Buat Laporan</a>
     <form method="get">
-      <input class="in" type="search" name="q" value="<?= $e($q) ?>" placeholder="Cari nama barang yang hilang...">
+      <input class="in" type="search" name="q" value="<?= $e($q) ?>" placeholder="Cari barang, kategori, atau deskripsi laporan...">
     </form>
   </section>
 
@@ -115,17 +105,16 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
   <?php else: ?>
   <div class="grid">
     <?php foreach ($items as $it): ?>
-    <article class="item">
-      <?php if ($it['foto']): ?>
-        <img src="uploads/<?= $e(rawurlencode($it['foto'])) ?>" alt="<?= $e($it['nama_barang']) ?>">
-      <?php else: ?><div class="ph">Tanpa foto</div><?php endif; ?>
+    <a class="item" href="<?= $e(BASE_URL) ?>/laporan/detail.php?id=<?= rawurlencode($it['id_laporan']) ?>">
+      <img src="<?= $e(Upload::url($it['foto'])) ?>" alt="">
       <div class="bd">
         <span class="badge b-dipublikasi">Dipublikasi</span>
-        <h3><?= $e($it['nama_barang']) ?></h3>
+        <h3><?= $e($it['nama_kategori']) ?></h3>
+        <div class="muted">Kategori: <?= $e($it['kategori']) ?> · Lokasi: <?= $e($it['lokasi']) ?></div>
         <div class="muted">Hilang: <?= $e($it['tanggal_hilang']) ?></div>
         <div class="muted"><?= $e(mb_strimwidth((string) $it['deskripsi'], 0, 80, '…')) ?></div>
       </div>
-    </article>
+    </a>
     <?php endforeach; ?>
   </div>
   <?php endif; ?>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="title">
+  <title id="title">Tidak ada foto</title>
+  <rect width="640" height="400" fill="#e2e8f0"/>
+  <g fill="none" stroke="#94a3b8" stroke-linecap="round" stroke-linejoin="round" stroke-width="12">
+    <rect x="205" y="110" width="230" height="180" rx="18"/>
+    <circle cx="270" cy="170" r="18"/>
+    <path d="m218 260 68-62 46 42 37-32 54 52"/>
+  </g>
+</svg>

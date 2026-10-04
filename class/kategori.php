@@ -2,6 +2,8 @@
 class Kategori
 {
     private const MAX_NAMA_KATEGORI = 50;
+    private const PREFIX_ID = 'KT';
+    private const DIGIT_ID = 3;
 
     private DBconnection $db;
     private string $table = 'kategori';
@@ -18,24 +20,28 @@ class Kategori
     }
 
     /** Satu kategori, null bila tidak ada. */
-    public function find(int $id_kategori): ?array
+    public function find(string $id_kategori): ?array
     {
         return $this->db->fetchOne("SELECT id_kategori, nama_kategori FROM {$this->table} WHERE id_kategori = ?", [$id_kategori]);
     }
 
     /**
      * Tambah kategori baru.
-     * @return int id_kategori kategori baru
+     * @return string id_kategori kategori baru
      * @throws Exception bila nama_kategori kosong, terlalu panjang, atau sudah ada
      */
-    public function create(string $nama_kategori): int
+    public function create(string $nama_kategori): string
     {
         $nama_kategori = $this->bersihkanNamaKategori($nama_kategori);
         $this->pastikanUnik($nama_kategori);
 
         try {
-            $this->db->execute("INSERT INTO {$this->table} (nama_kategori) VALUES (?)", [$nama_kategori]);
-            return $this->db->lastInsertId();
+            $id = $this->buatIdBaru();
+            $this->db->execute(
+                "INSERT INTO {$this->table} (id_kategori, nama_kategori) VALUES (?, ?)",
+                [$id, $nama_kategori]
+            );
+            return $id;
         } catch (PDOException $e) {
             throw $this->terjemahkanError($e);
         }
@@ -45,7 +51,7 @@ class Kategori
      * Ubah nama_kategori kategori. nama_kategori milik sendiri tidak dianggap duplikat.
      * @throws Exception bila tidak ditemukan atau nama_kategori tidak valid
      */
-    public function update(int $id_kategori, string $nama_kategori): void
+    public function update(string $id_kategori, string $nama_kategori): void
     {
         if ($this->find($id_kategori) === null) {
             throw new Exception('Kategori tidak ditemukan.');
@@ -61,9 +67,9 @@ class Kategori
     }
 
     /** Jumlah laporan yang memakai kategori ini (0 = tidak dipakai). */
-    public function isUsed(int $id_kategori): int
+    public function isUsed(string $id_kategori): int
     {
-        $row = $this->db->fetchOne('SELECT COUNT(*) AS n FROM laporan WHERE kategori_id_kategori = ?', [$id_kategori]);
+        $row = $this->db->fetchOne('SELECT COUNT(*) AS n FROM laporan WHERE id_kategori = ?', [$id_kategori]);
         return (int) $row['n'];
     }
 
@@ -71,7 +77,7 @@ class Kategori
      * Hapus kategori yang tidak dipakai.
      * @throws Exception bila tidak ditemukan atau masih dipakai laporan
      */
-    public function delete(int $id_kategori): void
+    public function delete(string $id_kategori): void
     {
         if ($this->find($id_kategori) === null) {
             throw new Exception('Kategori tidak ditemukan.');
@@ -100,7 +106,7 @@ class Kategori
     }
 
     /** Cek nama_kategori belum dipakai (tidak peka huruf besar-kecil karena collation). */
-    private function pastikanUnik(string $nama_kategori, ?int $kecualiIdKategori = null): void
+    private function pastikanUnik(string $nama_kategori, ?string $kecualiIdKategori = null): void
     {
         $sql    = "SELECT id_kategori FROM {$this->table} WHERE nama_kategori = ?";
         $params = [$nama_kategori];
@@ -111,6 +117,19 @@ class Kategori
         if ($this->db->fetchOne($sql . ' LIMIT 1', $params) !== null) {
             throw new Exception('Kategori dengan nama_kategori tersebut sudah ada.');
         }
+    }
+
+    private function buatIdBaru(): string
+    {
+        $row = $this->db->fetchOne(
+            "SELECT MAX(CAST(SUBSTRING(id_kategori, 3) AS UNSIGNED)) AS maks FROM {$this->table}"
+        );
+        $next = (int) ($row['maks'] ?? 0) + 1;
+        $id = self::PREFIX_ID . str_pad((string) $next, self::DIGIT_ID, '0', STR_PAD_LEFT);
+        if (strlen($id) > 20) {
+            throw new Exception('Jumlah ID kategori maksimum telah tercapai.');
+        }
+        return $id;
     }
 
     /** Pengaman bila dua admin menyimpan nama_kategori sama di saat bersamaan (UNIQUE di database). */

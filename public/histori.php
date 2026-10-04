@@ -1,16 +1,13 @@
 <?php
-require_once __DIR__ . '/../class/dbconnection.php';
-require_once __DIR__ . '/../class/user.php';
-
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
-session_start();
-
-if (!isset($_SESSION['user'])) { header('Location: login.php'); exit; }
-if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
+require_once __DIR__ . '/partials/guard.php';
+$db = new DBconnection();
+$user = new User($db);
+$u = wajibRole(User::ROLE_MAHASISWA, $user);
 
 $active = 'histori';
-$u = $_SESSION['user'];
-$e = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+$e = [Helper::class, 'e'];
+$csrf = csrfToken();
+$flash = Helper::pullFlash();
 
 $tabs = ['semua' => 'Semua', 'menunggu' => 'Menunggu', 'dipublikasi' => 'Dipublikasi', 'ditolak' => 'Ditolak', 'ditemukan' => 'Ditemukan'];
 $tab = (isset($_GET['status']) && is_string($_GET['status']) && isset($tabs[$_GET['status']])) ? $_GET['status'] : 'semua';
@@ -18,21 +15,15 @@ $tab = (isset($_GET['status']) && is_string($_GET['status']) && isset($tabs[$_GE
 $all = [];
 $error = '';
 try {
-    $all = (new DBconnection())->fetchAll(
-        'SELECT nama_barang, tanggal_hilang, foto, status
-         FROM laporan WHERE user_id = ? ORDER BY tanggal_hilang DESC',
-        [$u['nim']]
-    );
+    $all = (new Laporan($db))->byUser($u['nim']);
 } catch (PDOException $ex) {
     $error = 'Gagal memuat histori. Coba lagi nanti.';
-} catch (Exception $ex) {
-    $all = [];
 }
 
 $count = array_fill_keys(array_keys($tabs), 0);
 $count['semua'] = count($all);
-foreach ($all as $r) { if (isset($count[$r['status']])) { $count[$r['status']]++; } }
-$rows = array_values(array_filter($all, fn($r) => $tab === 'semua' || $r['status'] === $tab));
+foreach ($all as $r) { if (isset($count[$r['status_laporan']])) { $count[$r['status_laporan']]++; } }
+$rows = array_values(array_filter($all, fn($r) => $tab === 'semua' || $r['status_laporan'] === $tab));
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -76,7 +67,7 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
 .tab{padding:6px 12px;border-radius:99px;border:1px solid #e2e8f0;background:#fff;color:#475569;font-size:13px;font-weight:500}
 .tab.on{background:#2563eb;border-color:#2563eb;color:#fff}
-.row{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #f1f5f9}
+.row{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #f1f5f9;color:inherit}
 .row:last-child{border-bottom:0}
 .row .th{width:56px;height:56px;border-radius:8px;background:#e2e8f0;object-fit:cover;flex:none}
 .row .tx{flex:1;min-width:0}.row .tx strong{display:block;font-size:14px}
@@ -85,27 +76,28 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 <body>
 <header class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="index.php"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span> LostFound KAMPUS</a>
+    <a class="brand" href="<?= $e(BASE_URL) ?>/index.php"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span> LostFound KAMPUS</a>
     <nav class="links">
-      <a href="index.php" class="<?= $active === 'index' ? 'on' : '' ?>">Beranda</a>
-      <a href="histori.php" class="<?= $active === 'histori' ? 'on' : '' ?>">Histori Laporan</a>
-      <a href="profil.php" class="<?= $active === 'profil' ? 'on' : '' ?>">Profil</a>
-      <form method="post" action="logout.php">
-        <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
+      <a href="<?= $e(BASE_URL) ?>/index.php" class="<?= $active === 'index' ? 'on' : '' ?>">Beranda</a>
+      <a href="<?= $e(BASE_URL) ?>/histori.php" class="<?= $active === 'histori' ? 'on' : '' ?>">Histori Laporan</a>
+      <a href="<?= $e(BASE_URL) ?>/profil.php" class="<?= $active === 'profil' ? 'on' : '' ?>">Profil</a>
+      <form method="post" action="<?= $e(BASE_URL) ?>/logout.php">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
         <button type="submit" class="btn-logout">Logout</button>
       </form>
     </nav>
   </div>
 </header>
 <div class="wrap">
+  <?php if ($flash): ?><div class="alert <?= $flash['tipe'] === 'success' ? 'ok' : ($flash['tipe'] === 'danger' ? 'err' : 'info') ?>"><?= $e($flash['pesan']) ?></div><?php endif; ?>
   <div class="head">
     <div><h1>Histori Laporan Saya</h1><p class="muted">Pantau status pelaporan Anda</p></div>
-    <a class="btn-sm" href="buat_laporan.php">Buat Laporan Baru</a>
+    <a class="btn-sm" href="<?= $e(BASE_URL) ?>/laporan/buat.php">Buat Laporan Baru</a>
   </div>
 
   <div class="tabs">
     <?php foreach ($tabs as $k => $label): ?>
-      <a class="tab <?= $tab === $k ? 'on' : '' ?>" href="histori.php?status=<?= $e($k) ?>"><?= $e($label) ?> (<?= (int) $count[$k] ?>)</a>
+      <a class="tab <?= $tab === $k ? 'on' : '' ?>" href="<?= $e(BASE_URL) ?>/histori.php?status=<?= $e($k) ?>"><?= $e($label) ?> (<?= (int) $count[$k] ?>)</a>
     <?php endforeach; ?>
   </div>
 
@@ -113,11 +105,11 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
     <?php if ($error): ?><div class="alert err"><?= $e($error) ?></div>
     <?php elseif (!$rows): ?><div class="alert info" style="margin:0">Belum ada laporan<?= $tab !== 'semua' ? ' dengan status ini' : '' ?>.</div>
     <?php else: foreach ($rows as $r): ?>
-      <div class="row">
-        <?php if ($r['foto']): ?><img class="th" src="uploads/<?= $e(rawurlencode($r['foto'])) ?>" alt=""><?php else: ?><div class="th"></div><?php endif; ?>
-        <div class="tx"><strong><?= $e($r['nama_barang']) ?></strong><span class="muted">Hilang: <?= $e($r['tanggal_hilang']) ?></span></div>
-        <span class="badge b-<?= $e($r['status']) ?>"><?= $e(ucfirst($r['status'])) ?></span>
-      </div>
+      <a class="row" href="<?= $e(BASE_URL) ?>/laporan/detail.php?id=<?= rawurlencode($r['id_laporan']) ?>">
+        <img class="th" src="<?= $e(Upload::url($r['foto'])) ?>" alt="">
+        <div class="tx"><strong><?= $e($r['nama_kategori']) ?></strong><span class="muted">Hilang: <?= $e($r['tanggal_hilang']) ?></span></div>
+        <span class="badge b-<?= $e($r['status_laporan']) ?>"><?= $e(ucfirst($r['status_laporan'])) ?></span>
+      </a>
     <?php endforeach; endif; ?>
   </div>
 </div>
