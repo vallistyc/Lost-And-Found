@@ -30,8 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $user = (new User(new DBconnection()))->login($identitas, $password);
-            session_regenerate_id(true);   // cegah session fixation
-            $_SESSION['user'] = $user;     // password sudah di-unset oleh User::login
+            session_regenerate_id(true);  
+            $_SESSION['user'] = $user;
             header('Location: index.php');
             exit;
         } catch (PDOException $ex) {
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Login LostAndFound KAMPUS</title>
+<title>Login LostFound KAMPUS</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#0f172a;line-height:1.5}
@@ -86,15 +86,15 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
 </head>
 <body class="authbg">
 <main class="authcard">
-  <div class="authhead"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><h1>LostAndFound KAMPUS</h1><p>Sistem Pelaporan Barang Hilang &amp; Temuan Mahasiswa</p></div>
+  <div class="authhead"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><h1>LostAndFound Kampus</h1><p>Sistem Pelaporan Barang Hilang &amp; Temuan Mahasiswa</p></div>
   <?php if ($flash): ?><div class="alert <?= $e($flash['type']) ?>"><?= $e($flash['msg']) ?></div><?php endif; ?>
   <?php if ($error): ?><div class="alert err"><?= $e($error) ?></div><?php endif; ?>
   <form method="post">
     <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
     <label for="identitas">NIM</label>
-    <input class="in" id="identitas" name="identitas" value="<?= $e($identitas) ?>" placeholder="Contoh: 21010123" required autofocus>
+    <input class="in" id="identitas" name="identitas" value="<?= $e($identitas) ?>" 
     <label for="password">Password</label>
-    <input class="in" id="password" type="password" name="password" placeholder="••••••••" required>
+    <input class="in" id="password" type="password" name="password" required>
     <button class="btn" type="submit">Masuk</button>
   </form>
   <p class="authfoot">Belum punya akun? <a href="signup.php">Daftar</a></p>
