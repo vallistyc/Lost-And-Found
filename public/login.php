@@ -6,7 +6,6 @@ session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
 session_start();
 
 if (isset($_SESSION['user'])) { header('Location: index.php'); exit; }
-if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
 
 $e = fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 $flash = $_SESSION['flash'] ?? null;
@@ -14,13 +13,6 @@ unset($_SESSION['flash']);
 
 $error = '';
 $identitas = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $token = $_POST['csrf'] ?? '';
-    if (!is_string($token) || !hash_equals($_SESSION['csrf'], $token)) {
-        http_response_code(419);
-        exit('Sesi tidak valid. Muat ulang halaman lalu coba lagi.');
-    }
 
     $identitas = is_string($_POST['identitas'] ?? null) ? trim($_POST['identitas']) : '';
     $password  = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
@@ -40,7 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = $ex->getMessage();
         }
     }
-}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -52,14 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#0f172a;line-height:1.5}
 a{color:#2563eb;text-decoration:none}
-.topbar{background:#fff;border-bottom:1px solid #e2e8f0}
 .topbar-in{max-width:1120px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;color:#0f172a;font-size:15px}
 .logo{width:28px;height:28px;border-radius:8px;background:#dbeafe;color:#2563eb;display:inline-flex;align-items:center;justify-content:center}
-.links{display:flex;align-items:center;gap:20px;font-size:14px;flex-wrap:wrap}
 .links a{color:#475569;font-weight:500}.links a.on{color:#2563eb}
 .links form{margin:0}
-.btn-logout{background:#2563eb;color:#fff;border:0;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer}
 .wrap{max-width:1120px;margin:0 auto;padding:24px 20px}
 .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px}
 .alert{padding:10px 14px;border-radius:8px;font-size:14px;margin-bottom:14px;border:1px solid}
@@ -72,8 +60,6 @@ label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
 .in[readonly]{background:#f1f5f9;color:#64748b}
 .btn{display:block;width:100%;margin-top:18px;padding:11px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-size:14px;font-weight:600;cursor:pointer;text-align:center;font-family:inherit}
 .btn.dark{background:#0f172a}
-.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#e2e8f0;color:#475569}
-.b-menunggu{background:#fef3c7;color:#b45309}.b-dipublikasi{background:#dbeafe;color:#1d4ed8}
 .b-ditolak{background:#fee2e2;color:#b91c1c}.b-ditemukan{background:#dcfce7;color:#15803d}
 .muted{color:#64748b;font-size:13px}
 footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:18px 20px;text-align:center;font-size:12px;color:#64748b}
@@ -92,7 +78,7 @@ footer.ft{border-top:1px solid #e2e8f0;background:#fff;margin-top:40px;padding:1
   <form method="post">
     <input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>">
     <label for="identitas">NIM</label>
-    <input class="in" id="identitas" name="identitas" value="<?= $e($identitas) ?>" 
+   <input class="in" id="identitas" name="identitas" value="<?= $e($identitas) ?>" required autofocus>
     <label for="password">Password</label>
     <input class="in" id="password" type="password" name="password" required>
     <button class="btn" type="submit">Masuk</button>
